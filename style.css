@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
 * {
     margin: 0;
     padding: 0;
@@ -18,20 +20,232 @@ body, html {
 }
 
 #hud {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    pointer-events: none; color: #fff; font-family: monospace; font-size: 13px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    color: white;
+    font-family: monospace;
+    pointer-events: none;
 }
-#crosshair {
-    position: absolute; top: 50%; left: 50%;
+
+#mainMenu, #howToPlay {
+    pointer-events: auto;
+}
+
+#mainMenu {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: #0a0b0f;
+    font-family: 'Inter', monospace, sans-serif;
+}
+
+#mainMenu::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(45,108,223,0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(45,108,223,0.08) 1px, transparent 1px);
+    background-size: 40px 40px;
+    mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+    pointer-events: none;
+}
+
+#mainMenu::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60%;
+    height: 2px;
+    background: rgba(45,108,223,0.5);
+    box-shadow: 0 0 40px 12px rgba(45,108,223,0.2), 0 0 80px 24px rgba(45,108,223,0.08);
+    pointer-events: none;
+}
+
+.menu-badge {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    color: rgba(45,108,223,0.9);
+    text-transform: uppercase;
+    border: 0.5px solid rgba(45,108,223,0.3);
+    border-radius: 20px;
+    padding: 4px 14px;
+    margin-bottom: 20px;
+    background: rgba(45,108,223,0.06);
+    position: relative;
+    z-index: 1;
+}
+
+#mainMenu h1 {
+    font-size: 32px;
+    font-weight: 600;
+    color: #f0f0f0;
+    letter-spacing: -0.02em;
+    text-align: center;
+    margin: 0 0 6px;
+    line-height: 1.1;
+    position: relative;
+    z-index: 1;
+}
+
+.menu-subtitle {
+    font-size: 13px;
+    color: rgba(255,255,255,0.3);
+    font-weight: 300;
+    letter-spacing: 0.04em;
+    margin-bottom: 36px;
+    position: relative;
+    z-index: 1;
+}
+
+.menu-divider {
+    width: 280px;
+    height: 0.5px;
+    background: rgba(255,255,255,0.06);
+    margin-bottom: 24px;
+    position: relative;
+    z-index: 1;
+}
+
+#mainMenu button {
+    width: 280px;
+    padding: 13px 20px;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Inter', monospace, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: transform 0.15s, opacity 0.15s;
+    letter-spacing: 0.01em;
+    color: #fff;
+    margin-bottom: 10px;
+    position: relative;
+    z-index: 1;
+}
+
+#mainMenu button:hover { transform: translateY(-1px); opacity: 0.9; }
+#mainMenu button:active { transform: scale(0.98); }
+
+#playBtn {
+    background: #2d6cdf;
+}
+
+#howBtn, #configBtn {
+    background: rgba(255,255,255,0.05);
+    border: 0.5px solid rgba(255,255,255,0.1) !important;
+}
+
+.menu-footer {
+    margin-top: 28px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.15);
+    letter-spacing: 0.06em;
+    position: relative;
+    z-index: 1;
+}
+
+.menu-footer::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #3ecf8e;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+#howToPlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 24px; color: rgba(255,255,255,0.8); user-select: none;
+    width: 400px;
+    background: rgba(20,20,20,0.95);
+    color: white;
+    padding: 25px;
+    border-radius: 10px;
+    text-align: center;
+    font-family: 'Inter', monospace, sans-serif;
+    border: 0.5px solid rgba(255,255,255,0.08);
+    z-index: 10;
 }
+
+#howToPlay h2 {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 20px;
+    color: #f0f0f0;
+}
+
+#howToPlay p {
+    font-size: 13px;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 10px;
+}
+
+#closeHowBtn {
+    margin-top: 24px;
+    padding: 10px 28px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 0.5px solid rgba(255,255,255,0.1) !important;
+    color: #fff;
+    font-family: 'Inter', monospace, sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: transform 0.15s, opacity 0.15s;
+}
+
+#closeHowBtn:hover { opacity: 0.8; }
+#closeHowBtn:active { transform: scale(0.98); }
+
+#crosshair {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 24px;
+    color: rgba(255,255,255,0.8);
+    user-select: none;
+}
+
 #info {
-    position: absolute; bottom: 16px; left: 16px;
-    background: rgba(0,0,0,0.5); padding: 8px 12px; border-radius: 6px;
+    display: none;
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    background: rgba(0,0,0,0.5);
+    padding: 8px 12px;
+    border-radius: 6px;
     line-height: 1.6;
 }
+
 #lightInfo {
-    position: absolute; bottom: 16px; right: 16px;
-    background: rgba(0,0,0,0.5); padding: 8px 12px; border-radius: 6px;
+    display: none;
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    background: rgba(0,0,0,0.5);
+    padding: 8px 12px;
+    border-radius: 6px;
+}
+
+.hidden {
+    display: none !important;
 }

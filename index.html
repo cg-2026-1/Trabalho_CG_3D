@@ -8,13 +8,42 @@
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
+
     <div id="hud">
+
+        <div id="mainMenu">
+            <div class="menu-badge">Computação Gráfica</div>
+            <h1>Cave Game Part. II</h1>
+            <p class="menu-subtitle">FPS GAME</p>
+            <div class="menu-divider"></div>
+
+            <button id="playBtn">Jogar <span>→</span></button>
+            <button id="howBtn">Como Jogar <span>→</span></button>
+            <button id="configBtn">Configurações <span>→</span></button>
+
+            <p class="menu-footer">WebGL 2.0 · GLSL ES 3.00</p>
+        </div>
+
+        <div id="howToPlay" class="hidden">
+            <h2>Como Jogar</h2>
+            <p>WASD — Movimentação</p>
+            <p>Mouse — Rotacionar câmera</p>
+            <p>ESC — Liberar mouse</p>
+            <button id="closeHowBtn">Fechar</button>
+        </div>
+
         <div id="crosshair">+</div>
+
         <div id="info">
             Câmera: <span id="camPos"></span>
         </div>
-        <div id="lightInfo">Luz: <span id="lightPos"></span></div>
+
+        <div id="lightInfo">
+            Luz: <span id="lightPos"></span>
+        </div>
+
     </div>
+
     <script type="module" src="src/main.js"></script>
 </body>
 </html>
