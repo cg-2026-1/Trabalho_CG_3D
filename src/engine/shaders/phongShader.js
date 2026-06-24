@@ -9,6 +9,7 @@ uniform mat4 uModelMatrix;
 uniform mat4 uViewMatrix;
 uniform mat4 uProjectionMatrix;
 uniform mat3 uNormalMatrix;
+uniform vec2 uTexTiling; // repetição de textura (ex: 4.0, 4.0 para paredes/chão)
 
 out vec3 vWorldPosition;
 out vec3 vNormal;
@@ -20,7 +21,7 @@ void main() {
 
     // Usa a normal matrix para transformar normais corretamente
     vNormal = uNormalMatrix * aNormal;
-    vTexCoord = aTexCoord;
+    vTexCoord = aTexCoord * uTexTiling;
 
     gl_Position = uProjectionMatrix * uViewMatrix * worldPosition;
 }
@@ -45,30 +46,43 @@ uniform float uAmbientStrength;
 uniform float uSpecularStrength;
 uniform float uShininess;
 
+// Luz secundária (muzzle flash da escopeta)
+uniform vec3  uFlashPosition;
+uniform vec3  uFlashColor;
+uniform float uFlashIntensity; // 0 = apagado
+
 out vec4 fragColor;
 
 void main() {
-    // --- Ambiente ---
-    vec3 ambient = uAmbientStrength * uLightColor;
+    vec3 norm = normalize(vNormal);
 
-    // --- Difusa ---
-    vec3 norm     = normalize(vNormal);
+    // --- Luz principal (dinâmica, animada) ---
     vec3 lightDir = normalize(uLightPosition - vWorldPosition);
     float diff    = max(dot(norm, lightDir), 0.0);
     vec3 diffuse  = diff * uLightColor;
 
-    // --- Especular (reflexo Phong) ---
     vec3 viewDir    = normalize(uViewPosition - vWorldPosition);
     vec3 reflectDir = reflect(-lightDir, norm);
     float spec      = pow(max(dot(viewDir, reflectDir), 0.0), uShininess);
     vec3 specular   = uSpecularStrength * spec * uLightColor;
+
+    // --- Muzzle flash (luz pontual extra, decai com distância) ---
+    vec3 flashDir = uFlashPosition - vWorldPosition;
+    float flashDist = length(flashDir);
+    flashDir = normalize(flashDir);
+    float flashDiff = max(dot(norm, flashDir), 0.0);
+    float attenuation = 1.0 / (1.0 + 0.15 * flashDist + 0.05 * flashDist * flashDist);
+    vec3 flashLight = flashDiff * uFlashColor * uFlashIntensity * attenuation;
+
+    // --- Ambiente ---
+    vec3 ambient = uAmbientStrength * uLightColor;
 
     // --- Cor base: sólida ou textura ---
     vec3 baseColor = uUseTexture
         ? texture(uTextureSampler, vTexCoord).rgb
         : uObjectColor;
 
-    vec3 finalColor = (ambient + diffuse + specular) * baseColor;
+    vec3 finalColor = (ambient + diffuse + specular + flashLight) * baseColor;
     fragColor = vec4(finalColor, 1.0);
 }
 `;
@@ -128,5 +142,9 @@ export function getUniformLocations(gl, program) {
         uAmbientStrength:  gl.getUniformLocation(program, 'uAmbientStrength'),
         uSpecularStrength: gl.getUniformLocation(program, 'uSpecularStrength'),
         uShininess:        gl.getUniformLocation(program, 'uShininess'),
+        uTexTiling:        gl.getUniformLocation(program, 'uTexTiling'),
+        uFlashPosition:    gl.getUniformLocation(program, 'uFlashPosition'),
+        uFlashColor:       gl.getUniformLocation(program, 'uFlashColor'),
+        uFlashIntensity:   gl.getUniformLocation(program, 'uFlashIntensity'),
     };
 }

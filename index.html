@@ -3,18 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Engine WebGL 3D</title>
+    <title>Dungeon FPS — WebGL 2.0</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
+
     <div id="hud">
+
+        <div id="mainMenu">
+            <div class="menu-badge">Computação Gráfica</div>
+            <h1>Cave Game Part. II</h1>
+            <p class="menu-subtitle">DUNGEON FPS</p>
+            <div class="menu-divider"></div>
+
+            <button id="playBtn">Jogar <span>→</span></button>
+            <button id="howBtn">Como Jogar <span>→</span></button>
+            <button id="configBtn">Configurações <span>→</span></button>
+
+            <p class="menu-footer">WebGL 2.0 · GLSL ES 3.00</p>
+        </div>
+
+        <div id="howToPlay" class="hidden">
+            <h2>Como Jogar</h2>
+            <p>WASD — Movimentação</p>
+            <p>Mouse — Rotacionar câmera</p>
+            <p>Clique esquerdo — Atirar</p>
+            <p>R — Recarregar</p>
+            <p>ESC — Pausar / Liberar mouse</p>
+            <button id="closeHowBtn">Fechar</button>
+        </div>
+
         <div id="crosshair">+</div>
+
         <div id="info">
             Câmera: <span id="camPos"></span>
         </div>
-        <div id="lightInfo">Luz: <span id="lightPos"></span></div>
+
+        <div id="lightInfo">
+            Luz: <span id="lightPos"></span>
+        </div>
+
+        <div id="dungeonInfo"></div>
+
+        <div id="hudBottom">
+            <div class="hud-stat">
+                <span class="hud-label">Munição</span>
+                <span class="hud-value" id="ammoCount">8 / 8</span>
+            </div>
+            <div class="hud-stat">
+                <span class="hud-label">Monstros</span>
+                <span class="hud-value" id="monsterCount">6</span>
+            </div>
+            <div class="hud-stat">
+                <span class="hud-label">Abates</span>
+                <span class="hud-value" id="scoreCount">0</span>
+            </div>
+        </div>
+
+        <div id="damageOverlay"></div>
+
+        <div id="playerStats">
+            <div class="stat-bar-bg">
+                <div id="hpBar" class="stat-bar hp"></div>
+            </div>
+            <div class="stat-bar-bg">
+                <div id="spBar" class="stat-bar sp"></div>
+            </div>
+        </div>
+
     </div>
+
     <script type="module" src="src/main.js"></script>
 </body>
 </html>
