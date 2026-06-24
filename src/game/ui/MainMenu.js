@@ -16,6 +16,7 @@ export function initMainMenu(onPlay) {
         document.getElementById('crosshair').style.display = 'block';
         document.getElementById('info').style.display = 'block';
         document.getElementById('lightInfo').style.display = 'block';
+        document.getElementById('hudBottom').style.display = 'flex';
 
         onPlay();
     });

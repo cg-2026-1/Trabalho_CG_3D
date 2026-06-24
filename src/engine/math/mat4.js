@@ -99,6 +99,18 @@ export function rotateX(m, angle) {
     return multiply(m, rot);
 }
 
+// Rotação em Z
+export function rotateZ(m, angle) {
+    const c = Math.cos(angle), s = Math.sin(angle);
+    const rot = new Float32Array([
+         c, s, 0, 0,
+        -s, c, 0, 0,
+         0, 0, 1, 0,
+         0, 0, 0, 1
+    ]);
+    return multiply(m, rot);
+}
+
 // Escala uniforme ou não-uniforme
 export function scale(m, v) {
     const out = new Float32Array(m);
@@ -114,5 +126,67 @@ export function fromTranslation(v) {
     out[12] = v[0];
     out[13] = v[1];
     out[14] = v[2];
+    return out;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Extensões (Sprint dungeon/monstros/escopeta)
+// ─────────────────────────────────────────────────────────────
+
+// Cria matriz de escala pura (sem precisar de identity + scale)
+export function fromScale(v) {
+    const out = createIdentity();
+    out[0]  = v[0];
+    out[5]  = v[1];
+    out[10] = v[2];
+    return out;
+}
+
+/**
+ * Ângulo de rotação em Y para um objeto em selfPos "olhar" em direção
+ * a targetPos, apenas no plano XZ (usado pelos monstros mirarem o player).
+ */
+export function yawTowards(selfPos, targetPos) {
+    const dx = targetPos[0] - selfPos[0];
+    const dz = targetPos[2] - selfPos[2];
+    return Math.atan2(dx, dz);
+}
+
+// Transforma um ponto [x,y,z] por uma matriz 4x4 (column-major)
+export function transformPoint(m, p) {
+    const x = p[0], y = p[1], z = p[2];
+    return [
+        m[0]*x + m[4]*y + m[8]*z  + m[12],
+        m[1]*x + m[5]*y + m[9]*z  + m[13],
+        m[2]*x + m[6]*y + m[10]*z + m[14],
+    ];
+}
+
+// Cria matriz de modelo para objetos atrelados à câmera (arma/mão)
+// Transforma coordenadas do espaço local da câmera para o espaço do mundo
+export function createCameraModelMatrix(eye, pitch, yaw) {
+    const out = createIdentity();
+    const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+    const cosP = Math.cos(pitch), sinP = Math.sin(pitch);
+
+    // Vetor Forward (Frente da câmera, -Z local)
+    const f = [cosY * cosP, sinP, sinY * cosP];
+    
+    // Vetor Right (Direita da câmera, +X local) - Produto vetorial de Forward com Up global [0,1,0]
+    const r = [-sinY, 0, cosY]; // Simplificado matematicamente
+    
+    // Vetor Up (Cima da câmera, +Y local) - Produto vetorial de Right com Forward
+    const u = [
+        r[1]*f[2] - r[2]*f[1],
+        r[2]*f[0] - r[0]*f[2],
+        r[0]*f[1] - r[1]*f[0]
+    ];
+
+    // Colunas da matriz (Base ortogonal)
+    out[0] = r[0]; out[1] = r[1]; out[2] = r[2]; out[3] = 0;
+    out[4] = u[0]; out[5] = u[1]; out[6] = u[2]; out[7] = 0;
+    out[8] = -f[0]; out[9] = -f[1]; out[10] = -f[2]; out[11] = 0;
+    out[12] = eye[0]; out[13] = eye[1]; out[14] = eye[2]; out[15] = 1;
+
     return out;
 }

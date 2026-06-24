@@ -246,6 +246,84 @@ body, html {
     border-radius: 6px;
 }
 
+/* ────────── HUD inferior: munição / monstros / abates ────────── */
+#hudBottom {
+    display: none;
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    gap: 24px;
+    background: rgba(10,10,12,0.55);
+    border: 0.5px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 10px 22px;
+    font-family: 'Inter', monospace, sans-serif;
+    backdrop-filter: blur(4px);
+}
+
+.hud-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 64px;
+}
+
+.hud-label {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.35);
+    margin-bottom: 2px;
+}
+
+.hud-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: #e8a23e;
+}
+
 .hidden {
     display: none !important;
+}
+
+#playerStats {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.stat-bar-bg {
+    width: 220px;
+    height: 14px;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.stat-bar {
+    height: 100%;
+    width: 100%;
+    transition: width 0.1s linear, background-color 0.2s;
+}
+
+.hp { background: #d32f2f; }
+.sp { background: #388e3c; }
+
+#damageOverlay {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, transparent 40%, rgba(200, 0, 0, 0.5) 100%);
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.flash-red {
+    opacity: 1 !important;
 }
