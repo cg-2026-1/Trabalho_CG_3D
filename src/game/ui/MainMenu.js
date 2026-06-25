@@ -6,7 +6,7 @@ function setHUDVisible(visible) {
   document.getElementById("crosshair").style.display = display;
   document.getElementById("info").style.display = display;
   document.getElementById("lightInfo").style.display = display;
-
+  document.getElementById("doorPrompt").style.display = "none";
   document.getElementById("playerStats").style.display = visible
     ? "flex"
     : "none";
