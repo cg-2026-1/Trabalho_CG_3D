@@ -137,12 +137,6 @@ export function createDungeonArena(gl, program, opts = {}) {
     return {
         floor:  createMesh(gl, program, floorData),
         ceil:   createMesh(gl, program, ceilData),
-        walls: [
-            createMesh(gl, program, wallNorth),
-            createMesh(gl, program, wallSouth),
-            createMesh(gl, program, wallEast),
-            createMesh(gl, program, wallWest),
-        ],
         bounds: { minX: -halfX, maxX: halfX, minZ: -halfZ, maxZ: halfZ, height },
     };
 }
@@ -179,7 +173,4 @@ export function drawDungeonArena(gl, uniforms, arena, identityMatrix, texSet) {
 
     drawSurface(arena.floor, texSet.floor, [0.25, 0.22, 0.20]);
     drawSurface(arena.ceil,  texSet.ceil,  [0.12, 0.12, 0.14]);
-    for (const wall of arena.walls) {
-        drawSurface(wall, texSet.wall, [0.35, 0.30, 0.28]);
-    }
 }

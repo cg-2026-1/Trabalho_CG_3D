@@ -51,6 +51,9 @@ uniform vec3  uFlashPosition;
 uniform vec3  uFlashColor;
 uniform float uFlashIntensity; // 0 = apagado
 
+uniform bool uTriplanar;
+uniform float uTriplanarScale; // tamanho do tile em unidades do mundo
+
 out vec4 fragColor;
 
 void main() {
@@ -78,9 +81,25 @@ void main() {
     vec3 ambient = uAmbientStrength * uLightColor;
 
     // --- Cor base: sólida ou textura ---
-    vec3 baseColor = uUseTexture
-        ? texture(uTextureSampler, vTexCoord).rgb
-        : uObjectColor;
+    vec3 baseColor;
+        if (uUseTexture) {
+            if (uTriplanar) {
+                // Triplanar: blends 3 projeções pesadas pela normal absoluta
+                vec3 blendWeights = abs(norm);
+                blendWeights = max(blendWeights - 0.2, 0.0);
+                blendWeights /= (blendWeights.x + blendWeights.y + blendWeights.z);
+
+                vec3 col_x = texture(uTextureSampler, vWorldPosition.yz * uTriplanarScale).rgb;
+                vec3 col_y = texture(uTextureSampler, vWorldPosition.xz * uTriplanarScale).rgb;
+                vec3 col_z = texture(uTextureSampler, vWorldPosition.xy * uTriplanarScale).rgb;
+
+                baseColor = col_x * blendWeights.x + col_y * blendWeights.y + col_z * blendWeights.z;
+            } else {
+                baseColor = texture(uTextureSampler, vTexCoord).rgb;
+            }
+        } else {
+            baseColor = uObjectColor;
+        }
 
     vec3 finalColor = (ambient + diffuse + specular + flashLight) * baseColor;
     fragColor = vec4(finalColor, 1.0);
@@ -146,5 +165,7 @@ export function getUniformLocations(gl, program) {
         uFlashPosition:    gl.getUniformLocation(program, 'uFlashPosition'),
         uFlashColor:       gl.getUniformLocation(program, 'uFlashColor'),
         uFlashIntensity:   gl.getUniformLocation(program, 'uFlashIntensity'),
+        uTriplanar:      gl.getUniformLocation(program, 'uTriplanar'),
+        uTriplanarScale: gl.getUniformLocation(program, 'uTriplanarScale'),
     };
 }
