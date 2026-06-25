@@ -419,11 +419,26 @@ function render() {
     drawMesh(meshCube, model, monster.color, false, null);
   }
 
-  // --- Personagem OBJ externo (se carregado) ---
-  if (meshCharacter) {
-    let charModel = fromTranslation([0, 0, -4]);
-    drawMesh(meshCharacter, charModel, [0.8, 0.75, 0.7], false, null);
-  }
+    // --- Personagem OBJ externo (se carregado) ---
+    if (meshCharacter) {
+        let charModel = fromTranslation([0, 0, 0]); // ajuste a posição conforme necessário
+    
+        gl.uniformMatrix4fv(uniforms.uModelMatrix, false, charModel);
+        gl.uniformMatrix3fv(uniforms.uNormalMatrix, false, normalMatrix3x3(charModel));
+        gl.uniform2fv(uniforms.uTexTiling, [1, 1]);
+        gl.uniform1i(uniforms.uUseTexture, 1);
+        gl.uniform1i(uniforms.uTriplanar, 1);
+        gl.uniform1f(uniforms.uTriplanarScale, 0.5); // ~1 tile a cada 6-7 unidades
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, dungeonTextures.wall);
+        gl.uniform1i(uniforms.uTextureSampler, 0);
+        
+        gl.bindVertexArray(meshCharacter.vao);
+        gl.drawArrays(gl.TRIANGLES, 0, meshCharacter.vertexCount);
+        gl.bindVertexArray(null);
+        
+        gl.uniform1i(uniforms.uTriplanar, 0); // reseta para os outros objetos
+    }
 
   // --- Desenho da Arma (Mão Direita da Câmera) ---
   // Cria a matriz baseada na visão do jogador e ajusta a posição local
@@ -602,7 +617,7 @@ async function init() {
 
   // Personagem externo opcional
   try {
-    // const charData = await loadOBJ("assets/obj/characters/FinalBaseMesh.obj");
+    const charData = await loadOBJ("assets/obj/map/map.obj");
     meshCharacter = createMesh(gl, program, charData);
     console.log(`✅ Personagem carregado: ${charData.vertexCount} vértices`);
   } catch (e) {
