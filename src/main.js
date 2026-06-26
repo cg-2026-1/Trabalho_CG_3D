@@ -708,7 +708,7 @@ function resetGame() {
     "Dungeon Escape";
 
   monsters = spawnMonsters(100, dungeonArena.bounds, { safeRadius: 3.5 });
-  pickups = spawnPickups(100, dungeonArena.bounds);
+  pickups = spawnPickups(500, dungeonArena.bounds);
   doors = createDoors(gl, program, dungeonArena.bounds);
 }
 
@@ -816,7 +816,7 @@ async function init() {
 
   monsters = spawnMonsters(100, dungeonArena.bounds, { safeRadius: 3.5 });
   doors = createDoors(gl, program, dungeonArena.bounds);
-  pickups = spawnPickups(100, dungeonArena.bounds);
+  pickups = spawnPickups(500, dungeonArena.bounds);
 
   initMainMenu(() => {
     resetGame();
