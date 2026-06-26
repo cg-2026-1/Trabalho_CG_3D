@@ -8,6 +8,7 @@ import {
   tryInteractDoor,
   updateDoorHUD,
   isDoorBlocking,
+  resolveDoorCollision,
 } from "./game/core/Door.js";
 
 import {
@@ -66,6 +67,7 @@ let totalTime = 0;
 let paused = true;
 let score = 0;
 let wasGrounded = true;
+let prevCameraPos = [0, 1.7, 5];
 
 // ────────── Estado do Jogador ──────────
 const playerState = {
@@ -277,6 +279,8 @@ function update(dt) {
   if (paused || playerState.dead) return;
   totalTime += dt;
 
+  prevCameraPos = [...cameraState.position];
+
   let isSprinting = false;
 
   // --- Mecânica de Estamina e Corrida ---
@@ -298,7 +302,7 @@ function update(dt) {
   playerState.stamina = Math.max(0, Math.min(playerState.maxStamina, playerState.stamina));
 
   // --- Câmera + colisão do mapa OBJ ---
-  updateCamera(dt);
+  updateCamera(dt, doors);
   resolveMapCollision();
 
   weapon.update(dt);
@@ -414,24 +418,24 @@ function update(dt) {
  * pilares, rampas, etc.) que não é representada pela bounding box simples.
  */
 function resolveMapCollision() {
+  // 1) Portas: A colisão de portas JÁ É FEITA no updateCamera() do Camera.js!
+  // Removemos a chamada duplicada e invertida daqui para não travar o jogador.
+
+  // 2) Geometria do map.obj (paredes internas, pilares, chão real)
   if (!mapCollider) return;
 
   const pos = cameraState.position;
-  const { pos: corrected, onGround, groundY } = mapCollider.resolve(
-    pos,
-    pos, // prevPos (simplificado — poderia guardar a posição anterior)
-  );
+  
+  // Enviamos a posição atual e a posição anterior corretamente
+  const { pos: corrected, onGround, groundY } = mapCollider.resolve(pos, prevCameraPos);
 
   cameraState.position[0] = corrected[0];
   cameraState.position[1] = corrected[1];
   cameraState.position[2] = corrected[2];
 
-  // Integra com a física de pulo da câmera:
-  // se o collider diz que está no chão, e a câmera está caindo, pousa aqui.
   if (onGround && cameraState.velocityY <= 0) {
     cameraState.velocityY = 0;
     cameraState.isGrounded = true;
-    // A posição Y já foi corrigida pelo resolve() acima.
   }
 }
 
@@ -639,7 +643,7 @@ function resetGame() {
 
   monsters = spawnMonsters(6, dungeonArena.bounds, { safeRadius: 3.5 });
   pickups = spawnPickups(5, dungeonArena.bounds);
-  doors = createDoors(dungeonArena.bounds, meshCube);
+  doors = createDoors(gl, program, dungeonArena.bounds);
 }
 
 // ────────── Init ──────────
@@ -742,7 +746,7 @@ async function init() {
   }
 
   monsters = spawnMonsters(600, dungeonArena.bounds, { safeRadius: 3.5 });
-  doors = createDoors(dungeonArena.bounds, meshCube);
+  doors = createDoors(gl, program, dungeonArena.bounds);
   pickups = spawnPickups(500, dungeonArena.bounds);
 
   initMainMenu(() => {
