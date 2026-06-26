@@ -18,7 +18,7 @@ Diferentemente de engines prontas, o projeto implementa diversos componentes fun
 
 ## Vídeo de Demonstração
 
-[![demo](assets/readme/video_cover.png)]((https://youtu.be/KfmeE7MV1D4))
+[![demo](assets/readme/video_cover.png)](([https://youtu.be/KfmeE7MV1D4](https://youtu.be/KfmeE7MV1D4)))
 
 🎥 **Dungeon Escape**  
 📺 YouTube  
