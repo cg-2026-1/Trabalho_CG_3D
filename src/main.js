@@ -1,4 +1,5 @@
 // src/main.js — Dungeon FPS: arena texturizada + monstros-cubo + escopeta
+import { playSound, updateMovementSound, startSoundtrack, stopSoundtrack} from "./game/audio/AudioManager.js";
 import { initWebGL, resizeCanvas } from "./engine/renderer/webglSetup.js";
 import {
   createDoors,
@@ -60,6 +61,7 @@ let lastTime = 0;
 let totalTime = 0;
 let paused = true;
 let score = 0;
+let wasGrounded = true;
 
 // ────────── Estado do Jogador ──────────
 const playerState = {
@@ -196,6 +198,8 @@ function update(dt) {
   if (paused || playerState.dead) return;
   totalTime += dt;
 
+  let isSprinting = false;
+
   // --- Mecânica de Estamina e Corrida ---
   if (
     keys["shift"] &&
@@ -205,6 +209,7 @@ function update(dt) {
   ) {
     cameraState.speed = cameraState.sprintSpeed;
     playerState.stamina -= 30 * dt; // Drena 30 por segundo
+    isSprinting = true;
   } else {
     cameraState.speed = cameraState.walkSpeed;
     if (playerState.stamina < playerState.maxStamina && !keys["shift"]) {
@@ -219,6 +224,23 @@ function update(dt) {
 
   updateCamera(dt);
   weapon.update(dt);
+
+  // --- Lógica de Áudio: Pulo e Aterrissagem ---
+  // Se estava no chão, a câmera não está mais, e a velocidade Y é positiva = Pulou
+  if (wasGrounded && !cameraState.isGrounded && cameraState.velocityY > 0) {
+      playSound('jump');
+  } 
+  // Se não estava no chão e agora a câmera está = Aterrissou
+  else if (!wasGrounded && cameraState.isGrounded) {
+      playSound('jump'); // Você pode usar o mesmo som pra bater no chão
+  }
+
+  // Atualiza a memória pro próximo frame
+  wasGrounded = cameraState.isGrounded;
+
+  // --- Lógica de Áudio: Passos ---
+  updateMovementSound(cameraState.isMoving, isSprinting, cameraState.isGrounded);
+
   updateDoors(doors, dt, cameraState.position, (cost) => {
     if (coins >= cost) {
       coins -= cost;
@@ -242,16 +264,16 @@ function update(dt) {
 
     if (!monster.alive) continue;
 
-    // Distância no plano XZ
     const dx = cameraState.position[0] - monster.position[0];
     const dz = cameraState.position[2] - monster.position[2];
     const dist = Math.sqrt(dx * dx + dz * dz);
-
-    // Verifica colisão horizontal e de altura (para não levar dano se pular muito alto)
     const dy = Math.abs(cameraState.position[1] - monster.position[1]);
 
     if (dist < collisionDist && dy < 1.5 && playerState.iFrames <= 0) {
       playerState.hp -= 20; // Toma dano
+
+      playSound('damage'); 
+      
       playerState.iFrames = 1.5; // Fica invulnerável por 1.5 segundos
 
       // Efeito visual de dano na tela
@@ -260,13 +282,24 @@ function update(dt) {
       if (playerState.hp <= 0) {
         playerState.hp = 0;
         playerState.dead = true;
-        document.getElementById("mainMenu").querySelector("h1").innerText =
-          "VOCÊ MORREU";
+        stopSoundtrack();
+        document.getElementById("mainMenu").querySelector("h1").innerText = "VOCÊ MORREU";
         showMenu();
         document.exitPointerLock?.();
       }
     }
   }
+
+  if (playerState.hp <= 0) {
+        playerState.hp = 0;
+        playerState.dead = true;
+
+        stopSoundtrack(); 
+        
+        document.getElementById("mainMenu").querySelector("h1").innerText = "VOCÊ MORREU";
+        showMenu();
+        document.exitPointerLock?.();
+      }
 
   const pickupRadius = 1.2; // Distância para pegar o item
 
@@ -274,24 +307,22 @@ function update(dt) {
     let p = pickups[i];
     if (!p.active) continue;
 
-    // Distância do jogador para o item (plano XZ)
     const dx = cameraState.position[0] - p.position[0];
     const dz = cameraState.position[2] - p.position[2];
     const dist = Math.sqrt(dx * dx + dz * dz);
 
-    // Se estiver perto o suficiente, coleta o item
     if (dist < pickupRadius) {
-      p.active = false; // Desativa o item do mapa
+      p.active = false; 
 
       if (p.type === "health") {
         playerState.hp = Math.min(playerState.hp + 30, playerState.maxHp);
         console.log("Coletou Vida! HP: " + playerState.hp);
-      } else if (p.type === "ammo") {
-        weapon.ammo = Math.min(weapon.ammo + 4, weapon.maxAmmo);
-        console.log("Coletou Munição! Balas: " + weapon.ammo);
+        playSound('life');
+        
       } else if (p.type === "coin") {
         coins++;
         console.log("Moedas: " + coins);
+        playSound('coin');
       }
     }
   }
@@ -319,6 +350,7 @@ function tryFire() {
   }
 
   if (result.fired) {
+    playSound('shotgun');
     cameraState.pitch += 0.015;
   }
 }
@@ -346,8 +378,8 @@ function spawnPickups(count, bounds) {
       margin +
       Math.random() * (bounds.maxZ - bounds.minZ - 2 * margin);
 
-    // 50% de chance de ser vida, 50% de ser munição
-    const type = Math.random() > 0.5 ? "health" : "ammo";
+    // 100% de chance de ser vida
+    const type = "health";
 
     newPickups.push({
       id: i,
@@ -355,7 +387,7 @@ function spawnPickups(count, bounds) {
       position: [x, 0.4, z], // Altura base do chão
       active: true,
       baseY: 0.4, // Usado para a animação de flutuação
-      color: type === "health" ? [0.2, 0.8, 0.2] : [0.8, 0.6, 0.1], // Verde (vida) e Dourado (munição)
+      color: [0.2, 0.8, 0.2]
     });
   }
   return newPickups;
@@ -597,11 +629,17 @@ async function init() {
 
   // Recarga manual (tecla R) e pausa (ESC)
   window.addEventListener("keydown", (e) => {
-    if (e.key.toLowerCase() === "r") weapon.startReload();
+    if (e.key.toLowerCase() === "r") {
+      if (!weapon._reloading && weapon.ammo < weapon.maxAmmo) {
+            weapon.startReload();
+            playSound('reload');
+        }
+    }
     if (e.key === "Escape") {
       paused = true;
       showMenu();
       document.exitPointerLock?.();
+      stopSoundtrack();
     }
     if (e.key.toLowerCase() === "e") {
       const msg = tryInteractDoor(doors, cameraState.position, (cost) => {
@@ -611,7 +649,13 @@ async function init() {
         }
         return false;
       });
-      if (msg) console.log(msg); // Substituir por feedback visual se quiser
+      
+      if (msg) {
+          console.log(msg); 
+          if (msg.includes("desbloqueada")) {
+              playSound('door');
+          }
+      }
     }
   });
 
@@ -634,6 +678,8 @@ async function init() {
   initMainMenu(() => {
     // Chame o reset aqui! Toda vez que clicar em jogar, o jogo limpa o estado anterior
     resetGame();
+
+    startSoundtrack();
 
     paused = false;
     requestAnimationFrame((t) => {
