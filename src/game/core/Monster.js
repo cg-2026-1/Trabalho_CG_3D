@@ -88,7 +88,7 @@ export function spawnMonsters(count, bounds, opts = {}) {
             color: [0.65 + Math.random() * 0.2, 0.08, 0.08],
             scaleSize: 0.75 + Math.random() * 0.3,
             health: 1,
-            speed: 0.5 + Math.random() * 0.4,
+            speed: 2 + Math.random() * 0.4,
         }));
     }
     return monsters;

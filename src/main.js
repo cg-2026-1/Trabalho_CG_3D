@@ -54,7 +54,7 @@ import { MapCollider } from "./game/core/MapCollider.js";
 
 // ────────── Estado Global ──────────
 let gl, canvas, program, uniforms;
-let meshCube, meshCharacter;
+let meshCube, meshCharacter, meshMonster;
 let dungeonArena, dungeonTextures;
 let mapCollider = null; // colisão precisa do OBJ do mapa
 let monsters = [];
@@ -85,6 +85,37 @@ const playerState = {
   dead: false,
   coins: 0,
 };
+
+// ────────── OBJ embutido do monstro (Fantasma/Espectro) ──────────
+const MONSTER_OBJ = `
+# Fantasma / Espectro de 8 lados (Octaedro alongado)
+v 0.0 0.8 0.0
+v -0.4 0.2 0.4
+v 0.4 0.2 0.4
+v 0.4 0.2 -0.4
+v -0.4 0.2 -0.4
+v 0.0 -0.8 0.0
+
+vn -0.6 0.6 0.6
+vn 0.6 0.6 0.6
+vn 0.6 0.6 -0.6
+vn -0.6 0.6 -0.6
+vn -0.6 -0.6 0.6
+vn 0.6 -0.6 0.6
+vn 0.6 -0.6 -0.6
+vn -0.6 -0.6 -0.6
+
+# Metade de cima
+f 1//1 2//1 3//1
+f 1//2 3//2 4//2
+f 1//3 4//3 5//3
+f 1//4 5//4 2//4
+# Metade de baixo
+f 6//5 3//5 2//5
+f 6//6 4//6 3//6
+f 6//7 5//7 4//7
+f 6//8 2//8 5//8
+`;
 
 // ────────── OBJ embutido do cubo ──────────
 const CUBE_OBJ = `
@@ -570,7 +601,8 @@ function render() {
   for (const monster of monsters) {
     if (!monster.alive) continue;
     const model = monster.getModelMatrix(cameraState.position);
-    drawMesh(meshCube, model, monster.color, false, null);
+    const darkBloodColor = [0.4, 0.02, 0.05];
+    drawMesh(meshMonster, model, monster.color, false, null);
   }
 
   // ── Bloco da Zona de Saída ────────────────────────────────────────────────
@@ -676,7 +708,7 @@ function resetGame() {
     "Dungeon Escape";
 
   monsters = spawnMonsters(100, dungeonArena.bounds, { safeRadius: 3.5 });
-  pickups = spawnPickups(100, dungeonArena.bounds);
+  pickups = spawnPickups(500, dungeonArena.bounds);
   doors = createDoors(gl, program, dungeonArena.bounds);
 }
 
@@ -696,6 +728,9 @@ async function init() {
 
   // Mesh do cubo (monstros, arma, pickups)
   meshCube = createMesh(gl, program, parseOBJ(CUBE_OBJ));
+
+  // Mesh do monstro (fantasma/espectro)
+  meshMonster = createMesh(gl, program, parseOBJ(MONSTER_OBJ));
 
   // Arena da dungeon
   dungeonArena = createDungeonArena(gl, program, {
@@ -781,7 +816,7 @@ async function init() {
 
   monsters = spawnMonsters(100, dungeonArena.bounds, { safeRadius: 3.5 });
   doors = createDoors(gl, program, dungeonArena.bounds);
-  pickups = spawnPickups(100, dungeonArena.bounds);
+  pickups = spawnPickups(500, dungeonArena.bounds);
 
   initMainMenu(() => {
     resetGame();
