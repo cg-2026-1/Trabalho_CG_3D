@@ -38,7 +38,7 @@ import {
   cameraState,
   keys,
 } from "./game/core/Camera.js";
-import { initMainMenu, showMenu } from "./game/ui/MainMenu.js";
+import { initMainMenu, showMenu, showVictoryMenu } from "./game/ui/MainMenu.js";
 import {
   createDungeonArena,
   drawDungeonArena,
@@ -65,6 +65,12 @@ let weapon;
 let lastTime = 0;
 let totalTime = 0;
 let paused = true;
+let gameWon = false;
+const exitZone = {
+  position: [20.668528, 2.0, -34.5], // Centro (Y = 2 para encostar no chão sendo H=4)
+  scale: [4, 4.0, 2.5],            // Largura, Altura, Profundidade
+  color: [0.8, 1.0, 0.8]             // Tom esverdeado claro/brilhante
+};
 let score = 0;
 let wasGrounded = true;
 let prevCameraPos = [0, 1.7, 5];
@@ -320,9 +326,6 @@ function update(dt) {
   // Atualiza a memória pro próximo frame
   wasGrounded = cameraState.isGrounded;
 
-  // --- Lógica de Áudio: Passos ---
-  updateMovementSound(cameraState.isMoving, isSprinting, cameraState.isGrounded);
-
   updateDoors(doors, dt, cameraState.position, (cost) => {
     if (coins >= cost) {
       coins -= cost;
@@ -404,6 +407,30 @@ function update(dt) {
       }
     }
   }
+
+  if (!gameWon) {
+    const ex = exitZone.position[0];
+    const ez = exitZone.position[2];
+    const hx = exitZone.scale[0] / 2; // Metade da largura
+    const hz = exitZone.scale[2] / 2; // Metade da profundidade
+
+    const px = cameraState.position[0];
+    const pz = cameraState.position[2];
+
+    // Checagem de colisão AABB simples no eixo X e Z
+    if (Math.abs(px - ex) < hx + 0.3 && Math.abs(pz - ez) < hz + 0.3) {
+      gameWon = true;
+      paused = true;
+      stopSoundtrack();
+      document.exitPointerLock?.();
+      showVictoryMenu();
+    }
+
+    stopSoundtrack();
+  }
+
+  // --- Lógica de Áudio: Passos ---
+  updateMovementSound(cameraState.isMoving, isSprinting, cameraState.isGrounded);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -546,6 +573,12 @@ function render() {
     drawMesh(meshCube, model, monster.color, false, null);
   }
 
+  // ── Bloco da Zona de Saída ────────────────────────────────────────────────
+  let exitMatrix = createIdentity();
+  exitMatrix = translate(exitMatrix, exitZone.position);
+  exitMatrix = scale(exitMatrix, exitZone.scale);
+  drawMesh(meshCube, exitMatrix, exitZone.color, false, null);
+
   // ── Mapa OBJ externo (com triplanar) ─────────────────────────────────────
   if (meshCharacter) {
     const charModel = fromTranslation([0, 0, 0]);
@@ -618,6 +651,7 @@ function gameLoop(currentTime) {
 
 // ────────── Reset ──────────
 function resetGame() {
+  gameWon = false;
   playerState.hp = 100;
   playerState.stamina = 100;
   playerState.iFrames = 0;
@@ -639,10 +673,10 @@ function resetGame() {
 
   document.getElementById("damageOverlay").classList.remove("flash-red");
   document.getElementById("mainMenu").querySelector("h1").innerText =
-    "Cave Game Part. II";
+    "Dungeon Escape";
 
-  monsters = spawnMonsters(6, dungeonArena.bounds, { safeRadius: 3.5 });
-  pickups = spawnPickups(5, dungeonArena.bounds);
+  monsters = spawnMonsters(100, dungeonArena.bounds, { safeRadius: 3.5 });
+  pickups = spawnPickups(100, dungeonArena.bounds);
   doors = createDoors(gl, program, dungeonArena.bounds);
 }
 
@@ -745,9 +779,9 @@ async function init() {
     mapCollider = null;
   }
 
-  monsters = spawnMonsters(600, dungeonArena.bounds, { safeRadius: 3.5 });
+  monsters = spawnMonsters(100, dungeonArena.bounds, { safeRadius: 3.5 });
   doors = createDoors(gl, program, dungeonArena.bounds);
-  pickups = spawnPickups(500, dungeonArena.bounds);
+  pickups = spawnPickups(100, dungeonArena.bounds);
 
   initMainMenu(() => {
     resetGame();

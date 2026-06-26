@@ -1,4 +1,4 @@
-# CAVE GAME PART II
+# Dungeon Escape
 
 Jogo FPS 3D desenvolvido como trabalho da disciplina de Computação Gráfica.
 
@@ -8,7 +8,7 @@ O projeto foi desenvolvido utilizando **JavaScript** e **WebGL 2.0**, implementa
 
 # Descrição
 
-Cave Game Part II é um jogo de exploração em primeira pessoa ambientado em uma masmorra subterrânea. O jogador deve sobreviver enfrentando criaturas espalhadas pelo mapa, coletando moedas, abrindo portas e administrando recursos como vida, munição e estamina.
+Dungeon Escape é um jogo de exploração em primeira pessoa ambientado em uma masmorra subterrânea. O jogador deve sobreviver enfrentando criaturas espalhadas pelo mapa, coletando moedas, abrindo portas e administrando recursos como vida, munição e estamina.
 
 Diferentemente de engines prontas, o projeto implementa diversos componentes fundamentais da Computação Gráfica diretamente sobre a API WebGL, como transformações geométricas 3D, iluminação baseada no modelo de Phong, shaders programáveis, parser próprio para arquivos OBJ e geração procedural de texturas.
 

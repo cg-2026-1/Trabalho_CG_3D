@@ -23,14 +23,22 @@ export function initMainMenu(onPlay) {
   const howBtn = document.getElementById("howBtn");
   const configBtn = document.getElementById("configBtn");
   const modal = document.getElementById("howToPlay");
+  
+  // Novo botão da tela de vitória
+  const restartBtn = document.getElementById("restartBtn");
 
   playBtn.addEventListener("click", () => {
     hideMenu();
-
     setHUDVisible(true);
-
     onPlay();
   });
+
+  restartBtn.addEventListener("click", () => {
+    hideVictoryMenu();
+    setHUDVisible(true);
+    onPlay(); // Reaproveita a mesma função de resetar o jogo
+  });
+
   howBtn.addEventListener("click", () => {
     modal.classList.remove("hidden");
   });
@@ -52,4 +60,15 @@ export function showMenu() {
 export function hideMenu() {
   menu.style.display = "none";
   setHUDVisible(true);
+}
+
+export function showVictoryMenu() {
+  document.getElementById("victoryMenu").classList.remove("hidden");
+  document.getElementById("victoryMenu").style.display = "flex";
+  setHUDVisible(false);
+}
+
+export function hideVictoryMenu() {
+  document.getElementById("victoryMenu").style.display = "none";
+  document.getElementById("victoryMenu").classList.add("hidden");
 }
