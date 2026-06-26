@@ -457,7 +457,6 @@ function update(dt) {
       showVictoryMenu();
     }
 
-    stopSoundtrack();
   }
 
   // --- Lógica de Áudio: Passos ---
