@@ -14,6 +14,8 @@ import {
   fragmentShaderSource,
   createShaderProgram,
   getUniformLocations,
+  uploadLights,
+  MAX_LIGHTS,
 } from "./engine/shaders/phongShader.js";
 import {
   createIdentity,
@@ -46,11 +48,13 @@ import {
   createStoneFloorTexture,
   createCeilingTexture,
 } from "./engine/utils/TextureGenerator.js";
+import { MapCollider } from "./game/core/MapCollider.js";
 
 // ────────── Estado Global ──────────
 let gl, canvas, program, uniforms;
 let meshCube, meshCharacter;
 let dungeonArena, dungeonTextures;
+let mapCollider = null; // colisão precisa do OBJ do mapa
 let monsters = [];
 let pickups = [];
 let coins = [];
@@ -67,12 +71,12 @@ const playerState = {
   maxHp: 100,
   stamina: 100,
   maxStamina: 100,
-  iFrames: 0, // Cooldown de hit
+  iFrames: 0,
   dead: false,
   coins: 0,
 };
 
-// ────────── OBJ embutido do cubo (usado para monstros e props) ──────────
+// ────────── OBJ embutido do cubo ──────────
 const CUBE_OBJ = `
 # Cubo unitário centrado na origem
 v -0.5 -0.5  0.5
@@ -107,18 +111,89 @@ f 5/1/6 6/2/6 2/3/6
 f 5/1/6 2/3/6 1/4/6
 `;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SISTEMA DE LUZES POR SALA + LUZ DA CÂMERA
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Todas as luzes são passadas como array para o shader (uploadLights).
+// Slot 0 = luz orbital animada principal (centro da arena)
+// Slots 1..N-2 = luzes estáticas por sala/área do mapa
+// Slot N-1 = luz da lanterna da câmera (segue o player, sempre o último slot)
+//
+// Se o mapa tiver salas definidas, edite ROOM_LIGHTS com as posições corretas.
+// A luz da câmera é adicionada dinamicamente a cada frame.
+
+/**
+ * Luzes estáticas de sala. Cada entrada define uma tocha/lamparina num ponto do mapa.
+ * Ajuste as posições conforme a geometria real do seu map.obj.
+ * range: raio de influência em unidades do mundo (0 = infinito, não recomendado)
+ */
+const ROOM_LIGHTS = [
+  // Corredores / salas — distribua conforme o layout do mapa
+  // Formato: { position: [x, y, z], color: [r, g, b], range: N }
+  { position: [-5,  3.0, -5 ], color: [1.0, 0.55, 0.20], range: 8  }, // sala NW
+  { position: [ 5,  3.0, -5 ], color: [1.0, 0.55, 0.20], range: 8  }, // sala NE
+  { position: [-5,  3.0,  5 ], color: [1.0, 0.55, 0.20], range: 8  }, // sala SW
+  { position: [ 5,  3.0,  5 ], color: [1.0, 0.55, 0.20], range: 8  }, // sala SE
+  { position: [ 0,  3.0,  0 ], color: [1.0, 0.70, 0.30], range: 10 }, // centro
+  { position: [-8,  3.0,  0 ], color: [0.6, 0.40, 0.90], range: 6  }, // corredor W (tom roxo)
+  { position: [ 8,  3.0,  0 ], color: [0.6, 0.40, 0.90], range: 6  }, // corredor E (tom roxo)
+  // Slot MAX_LIGHTS-1 é reservado para a luz da câmera — não adicione mais que MAX_LIGHTS-1 aqui
+];
+
+/**
+ * Constrói o array de luzes para o frame atual.
+ * Inclui a luz orbital animada, as luzes de sala e a lanterna da câmera.
+ *
+ * @param {number} t           - tempo total (para animação)
+ * @param {number[]} camPos    - posição da câmera [x, y, z]
+ * @param {number[]} camDir    - direção de visão normalizada [x, y, z]
+ * @returns {Array} array de luzes para uploadLights()
+ */
+function buildLightArray(t, camPos, camDir) {
+  const lights = [];
+
+  // ── Luz orbital animada (tocha flutuante no centro da arena) ──────────────
+  const orbitRadius = 4.0;
+  const orbitHeight = 3.0;
+  lights.push({
+    position: [
+      Math.cos(t * 0.5) * orbitRadius,
+      orbitHeight,
+      Math.sin(t * 0.5) * orbitRadius,
+    ],
+    color: [1.0, 0.75, 0.45], // tom quente de antorcha
+    range: 14,
+  });
+
+  // ── Luzes estáticas de sala ───────────────────────────────────────────────
+  for (const rl of ROOM_LIGHTS) {
+    if (lights.length >= MAX_LIGHTS - 1) break; // reserva slot final para câmera
+    lights.push(rl);
+  }
+
+  // ── Luz da lanterna da câmera (sempre o último slot) ─────────────────────
+  // Posicionada levemente na frente e abaixo da câmera para simular uma lanterna.
+  const cameraLightOffset = 0.5; // metros na frente do player
+  lights.push({
+    position: [
+      camPos[0] + camDir[0] * cameraLightOffset,
+      camPos[1] + camDir[1] * cameraLightOffset - 0.15,
+      camPos[2] + camDir[2] * cameraLightOffset,
+    ],
+    color: [0.85, 0.90, 1.0], // tom ligeiramente azulado (LED)
+    range: 9,
+  });
+
+  return lights;
+}
+
 // ────────── Normal matrix 3x3 a partir da model matrix 4x4 ──────────
 function normalMatrix3x3(modelMatrix) {
   const m = modelMatrix;
-  const a00 = m[0],
-    a01 = m[1],
-    a02 = m[2];
-  const a10 = m[4],
-    a11 = m[5],
-    a12 = m[6];
-  const a20 = m[8],
-    a21 = m[9],
-    a22 = m[10];
+  const a00 = m[0], a01 = m[1], a02 = m[2];
+  const a10 = m[4], a11 = m[5], a12 = m[6];
+  const a20 = m[8], a21 = m[9], a22 = m[10];
 
   const det =
     a00 * (a11 * a22 - a12 * a21) -
@@ -165,12 +240,16 @@ function drawMesh(mesh, modelMatrix, color, useTexture, texture) {
 }
 
 // ────────── HUD ──────────
-function updateHUD(lightPos) {
+function updateHUD(lights) {
   const p = cameraState.position;
   document.getElementById("camPos").textContent =
     `(${p[0].toFixed(1)}, ${p[1].toFixed(1)}, ${p[2].toFixed(1)})`;
+
+  // Mostra a posição da luz orbital (primeira luz) no HUD
+  const orbitPos = lights[0]?.position ?? [0, 0, 0];
   document.getElementById("lightPos").textContent =
-    `(${lightPos[0].toFixed(1)}, ${lightPos[1].toFixed(1)}, ${lightPos[2].toFixed(1)})`;
+    `(${orbitPos[0].toFixed(1)}, ${orbitPos[1].toFixed(1)}, ${orbitPos[2].toFixed(1)})`;
+
   const coinEl = document.getElementById("coinCount");
   if (coinEl) coinEl.textContent = coins;
   const ammoEl = document.getElementById("ammoCount");
@@ -204,20 +283,19 @@ function update(dt) {
     cameraState.isGrounded
   ) {
     cameraState.speed = cameraState.sprintSpeed;
-    playerState.stamina -= 30 * dt; // Drena 30 por segundo
+    playerState.stamina -= 30 * dt;
   } else {
     cameraState.speed = cameraState.walkSpeed;
     if (playerState.stamina < playerState.maxStamina && !keys["shift"]) {
-      playerState.stamina += 15 * dt; // Regenera 15 por segundo
+      playerState.stamina += 15 * dt;
     }
   }
-  // Clamp estamina
-  playerState.stamina = Math.max(
-    0,
-    Math.min(playerState.maxStamina, playerState.stamina),
-  );
+  playerState.stamina = Math.max(0, Math.min(playerState.maxStamina, playerState.stamina));
 
+  // --- Câmera + colisão do mapa OBJ ---
   updateCamera(dt);
+  resolveMapCollision();
+
   weapon.update(dt);
   updateDoors(doors, dt, cameraState.position, (cost) => {
     if (coins >= cost) {
@@ -227,34 +305,28 @@ function update(dt) {
     return false;
   });
   updateDoorHUD(doors);
-  // --- I-Frames (Cooldown de Hit) ---
+
+  // --- I-Frames ---
   if (playerState.iFrames > 0) {
     playerState.iFrames -= dt;
     if (playerState.iFrames <= 0)
       document.getElementById("damageOverlay").classList.remove("flash-red");
   }
 
-  // --- Lógica de Monstros e Colisão (Dano) ---
-  const collisionDist = 1.2; // Raio do player + Raio do monstro
-
+  // --- Monstros ---
+  const collisionDist = 1.2;
   for (const monster of monsters) {
     monster.update(dt, cameraState.position);
-
     if (!monster.alive) continue;
 
-    // Distância no plano XZ
     const dx = cameraState.position[0] - monster.position[0];
     const dz = cameraState.position[2] - monster.position[2];
     const dist = Math.sqrt(dx * dx + dz * dz);
-
-    // Verifica colisão horizontal e de altura (para não levar dano se pular muito alto)
     const dy = Math.abs(cameraState.position[1] - monster.position[1]);
 
     if (dist < collisionDist && dy < 1.5 && playerState.iFrames <= 0) {
-      playerState.hp -= 20; // Toma dano
-      playerState.iFrames = 1.5; // Fica invulnerável por 1.5 segundos
-
-      // Efeito visual de dano na tela
+      playerState.hp -= 20;
+      playerState.iFrames = 1.5;
       document.getElementById("damageOverlay").classList.add("flash-red");
 
       if (playerState.hp <= 0) {
@@ -268,36 +340,63 @@ function update(dt) {
     }
   }
 
-  const pickupRadius = 1.2; // Distância para pegar o item
-
+  // --- Pickups ---
+  const pickupRadius = 1.2;
   for (let i = 0; i < pickups.length; i++) {
     let p = pickups[i];
     if (!p.active) continue;
 
-    // Distância do jogador para o item (plano XZ)
     const dx = cameraState.position[0] - p.position[0];
     const dz = cameraState.position[2] - p.position[2];
     const dist = Math.sqrt(dx * dx + dz * dz);
 
-    // Se estiver perto o suficiente, coleta o item
     if (dist < pickupRadius) {
-      p.active = false; // Desativa o item do mapa
-
+      p.active = false;
       if (p.type === "health") {
         playerState.hp = Math.min(playerState.hp + 30, playerState.maxHp);
-        console.log("Coletou Vida! HP: " + playerState.hp);
       } else if (p.type === "ammo") {
         weapon.ammo = Math.min(weapon.ammo + 4, weapon.maxAmmo);
-        console.log("Coletou Munição! Balas: " + weapon.ammo);
       } else if (p.type === "coin") {
         coins++;
-        console.log("Moedas: " + coins);
       }
     }
   }
 }
 
-// ────────── Disparo da escopeta (clique esquerdo) ──────────
+// ─────────────────────────────────────────────────────────────────────────────
+// COLISÃO DO MAPA OBJ — resolve a posição do player contra a geometria importada
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Aplica o MapCollider após updateCamera() mover o player.
+ * Se o collider ainda não foi criado (mapa não carregado), não faz nada.
+ *
+ * O Camera.js já aplica colisão com a AABB da arena (paredes externas).
+ * Este passo complementa com a geometria INTERNA do map.obj (paredes de salas,
+ * pilares, rampas, etc.) que não é representada pela bounding box simples.
+ */
+function resolveMapCollision() {
+  if (!mapCollider) return;
+
+  const pos = cameraState.position;
+  const { pos: corrected, onGround, groundY } = mapCollider.resolve(
+    pos,
+    pos, // prevPos (simplificado — poderia guardar a posição anterior)
+  );
+
+  cameraState.position[0] = corrected[0];
+  cameraState.position[1] = corrected[1];
+  cameraState.position[2] = corrected[2];
+
+  // Integra com a física de pulo da câmera:
+  // se o collider diz que está no chão, e a câmera está caindo, pousa aqui.
+  if (onGround && cameraState.velocityY <= 0) {
+    cameraState.velocityY = 0;
+    cameraState.isGrounded = true;
+    // A posição Y já foi corrigida pelo resolve() acima.
+  }
+}
+
+// ────────── Disparo da escopeta ──────────
 function tryFire() {
   if (paused) return;
 
@@ -307,7 +406,6 @@ function tryFire() {
 
   if (result.fired && result.killed) {
     score += 1;
-
     pickups.push({
       id: Date.now() + Math.random(),
       type: "coin",
@@ -321,14 +419,6 @@ function tryFire() {
   if (result.fired) {
     cameraState.pitch += 0.015;
   }
-}
-
-function spawnCoin(position) {
-  coins.push({
-    position: [...position],
-    active: true,
-    rotation: 0,
-  });
 }
 
 // Função procedural para criar itens espalhados pelo mapa
@@ -346,16 +436,14 @@ function spawnPickups(count, bounds) {
       margin +
       Math.random() * (bounds.maxZ - bounds.minZ - 2 * margin);
 
-    // 50% de chance de ser vida, 50% de ser munição
     const type = Math.random() > 0.5 ? "health" : "ammo";
-
     newPickups.push({
       id: i,
-      type: type,
-      position: [x, 0.4, z], // Altura base do chão
+      type,
+      position: [x, 0.4, z],
       active: true,
-      baseY: 0.4, // Usado para a animação de flutuação
-      color: type === "health" ? [0.2, 0.8, 0.2] : [0.8, 0.6, 0.1], // Verde (vida) e Dourado (munição)
+      baseY: 0.4,
+      color: type === "health" ? [0.2, 0.8, 0.2] : [0.8, 0.6, 0.1],
     });
   }
   return newPickups;
@@ -363,7 +451,7 @@ function spawnPickups(count, bounds) {
 
 // ────────── Render ──────────
 function render() {
-  gl.clearColor(0.04, 0.03, 0.05, 1.0); // tom roxo-escuro de masmorra
+  gl.clearColor(0.04, 0.03, 0.05, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   gl.useProgram(program);
@@ -376,72 +464,63 @@ function render() {
   gl.uniformMatrix4fv(uniforms.uViewMatrix, false, view);
   gl.uniform3fv(uniforms.uViewPosition, cameraState.position);
 
-  // Luz principal animada (orbital, estilo torch flutuante)
-  const lightRadius = 4.0;
-  const lightHeight = 3.0;
-  const lightPos = [
-    Math.cos(totalTime * 0.5) * lightRadius,
-    lightHeight,
-    Math.sin(totalTime * 0.5) * lightRadius,
-  ];
-  gl.uniform3fv(uniforms.uLightPosition, lightPos);
-  gl.uniform3fv(uniforms.uLightColor, [1.0, 0.75, 0.45]); // tom de antorcha
+  // ── Monta e envia array de luzes ──────────────────────────────────────────
+  const camDir = getViewDirection();
+  const lights = buildLightArray(totalTime, cameraState.position, camDir);
+  uploadLights(gl, uniforms, lights);
 
-  gl.uniform1f(uniforms.uAmbientStrength, 0.12);
-  gl.uniform1f(uniforms.uSpecularStrength, 0.5);
-  gl.uniform1f(uniforms.uShininess, 24.0);
+  // ── Material Phong global ─────────────────────────────────────────────────
+  gl.uniform1f(uniforms.uAmbientStrength,  0.10);
+  gl.uniform1f(uniforms.uSpecularStrength, 0.45);
+  gl.uniform1f(uniforms.uShininess,        24.0);
 
-  // Muzzle flash da luz de cena: posiciona a "luz do tiro" um pouco na frente da câmera
-  const dir = getViewDirection();
+  // ── Muzzle flash ──────────────────────────────────────────────────────────
   const flashPos = [
-    cameraState.position[0] + dir[0] * 0.6,
-    cameraState.position[1] + dir[1] * 0.6 - 0.1,
-    cameraState.position[2] + dir[2] * 0.6,
+    cameraState.position[0] + camDir[0] * 0.6,
+    cameraState.position[1] + camDir[1] * 0.6 - 0.1,
+    cameraState.position[2] + camDir[2] * 0.6,
   ];
   gl.uniform3fv(uniforms.uFlashPosition, flashPos);
-  gl.uniform3fv(uniforms.uFlashColor, [1.0, 0.6, 0.2]);
+  gl.uniform3fv(uniforms.uFlashColor,    [1.0, 0.6, 0.2]);
   gl.uniform1f(uniforms.uFlashIntensity, weapon.getFlashIntensity());
 
-  // --- Dungeon (chão, teto, paredes) ---
-  drawDungeonArena(
-    gl,
-    uniforms,
-    dungeonArena,
-    createIdentity(),
-    dungeonTextures,
-  );
+  // ── Triplanar: desligado por padrão ──────────────────────────────────────
+  gl.uniform1i(uniforms.uTriplanar,    0);
+  gl.uniform1f(uniforms.uTriplanarScale, 0.5);
+
+  // ── Arena (chão + teto) ───────────────────────────────────────────────────
+  drawDungeonArena(gl, uniforms, dungeonArena, createIdentity(), dungeonTextures);
   drawDoors(gl, uniforms, doors, normalMatrix3x3);
 
-  // --- Monstros (cubos virados para o player) ---
+  // ── Monstros ──────────────────────────────────────────────────────────────
+  // getModelMatrix usa yawTowards() corrigido → face +Z do cubo aponta para o player
   for (const monster of monsters) {
     if (!monster.alive) continue;
     const model = monster.getModelMatrix(cameraState.position);
     drawMesh(meshCube, model, monster.color, false, null);
   }
 
-    // --- Personagem OBJ externo (se carregado) ---
-    if (meshCharacter) {
-        let charModel = fromTranslation([0, 0, 0]); // ajuste a posição conforme necessário
-    
-        gl.uniformMatrix4fv(uniforms.uModelMatrix, false, charModel);
-        gl.uniformMatrix3fv(uniforms.uNormalMatrix, false, normalMatrix3x3(charModel));
-        gl.uniform2fv(uniforms.uTexTiling, [1, 1]);
-        gl.uniform1i(uniforms.uUseTexture, 1);
-        gl.uniform1i(uniforms.uTriplanar, 1);
-        gl.uniform1f(uniforms.uTriplanarScale, 0.5); // ~1 tile a cada 6-7 unidades
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, dungeonTextures.wall);
-        gl.uniform1i(uniforms.uTextureSampler, 0);
-        
-        gl.bindVertexArray(meshCharacter.vao);
-        gl.drawArrays(gl.TRIANGLES, 0, meshCharacter.vertexCount);
-        gl.bindVertexArray(null);
-        
-        gl.uniform1i(uniforms.uTriplanar, 0); // reseta para os outros objetos
-    }
+  // ── Mapa OBJ externo (com triplanar) ─────────────────────────────────────
+  if (meshCharacter) {
+    const charModel = fromTranslation([0, 0, 0]);
+    gl.uniformMatrix4fv(uniforms.uModelMatrix,  false, charModel);
+    gl.uniformMatrix3fv(uniforms.uNormalMatrix, false, normalMatrix3x3(charModel));
+    gl.uniform2fv(uniforms.uTexTiling,   [1, 1]);
+    gl.uniform1i(uniforms.uUseTexture,   1);
+    gl.uniform1i(uniforms.uTriplanar,    1);
+    gl.uniform1f(uniforms.uTriplanarScale, 0.5);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, dungeonTextures.wall);
+    gl.uniform1i(uniforms.uTextureSampler, 0);
 
-  // --- Desenho da Arma (Mão Direita da Câmera) ---
-  // Cria a matriz baseada na visão do jogador e ajusta a posição local
+    gl.bindVertexArray(meshCharacter.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, meshCharacter.vertexCount);
+    gl.bindVertexArray(null);
+
+    gl.uniform1i(uniforms.uTriplanar, 0); // reseta para os outros objetos
+  }
+
+  // ── Arma (mão direita da câmera) ─────────────────────────────────────────
   let gunMatrix = createCameraModelMatrix(
     cameraState.position,
     cameraState.pitch,
@@ -451,7 +530,7 @@ function render() {
   gunMatrix = scale(gunMatrix, [0.08, 0.08, 0.4]);
   drawMesh(meshCube, gunMatrix, [0.2, 0.2, 0.2], false, null);
 
-  // --- Muzzle Flash Visual (Cubo incandescente na ponta da arma) ---
+  // ── Muzzle Flash Visual ───────────────────────────────────────────────────
   if (weapon.flashTimer > 0) {
     let flashMatrix = createCameraModelMatrix(
       cameraState.position,
@@ -459,37 +538,25 @@ function render() {
       cameraState.yaw,
     );
     flashMatrix = translate(flashMatrix, [0.35, -0.25, -0.75]);
-    const flashScale = 0.05 + weapon.flashTimer * 0.5;
-    flashMatrix = scale(flashMatrix, [flashScale, flashScale, flashScale]);
+    const fs = 0.05 + weapon.flashTimer * 0.5;
+    flashMatrix = scale(flashMatrix, [fs, fs, fs]);
     drawMesh(meshCube, flashMatrix, [1.0, 0.8, 0.2], false, null);
   }
 
+  // ── Pickups ───────────────────────────────────────────────────────────────
   for (let i = 0; i < pickups.length; i++) {
     let p = pickups[i];
     if (!p.active) continue;
 
-    // 1. Matriz de Identidade
     let model = createIdentity();
-
-    // 2. Translação: Move para a posição X/Z e adiciona o 'bounce' no Y usando o tempo global
-    const floatOffset = Math.sin(totalTime * 3.0 + p.id) * 0.15; // Sobe e desce
-    model = translate(model, [
-      p.position[0],
-      p.baseY + floatOffset,
-      p.position[2],
-    ]);
-
-    // 3. Rotação: Gira em Y continuamente
+    const floatOffset = Math.sin(totalTime * 3.0 + p.id) * 0.15;
+    model = translate(model, [p.position[0], p.baseY + floatOffset, p.position[2]]);
     model = rotateY(model, totalTime * 1.5 + p.id);
-
-    // 4. Escala: Deixa o cubo menor
     model = scale(model, [0.3, 0.3, 0.3]);
-
-    // Usa a sua função drawMesh já existente, passando a cor definida no spawn
     drawMesh(meshCube, model, p.color, false, null);
   }
 
-  updateHUD(lightPos);
+  updateHUD(lights);
 }
 
 // ────────── Game Loop ──────────
@@ -503,40 +570,32 @@ function gameLoop(currentTime) {
   requestAnimationFrame(gameLoop);
 }
 
-// ────────── Função de Reset do Jogo ──────────
+// ────────── Reset ──────────
 function resetGame() {
-  // 1. Restaura estado do jogador
   playerState.hp = 100;
   playerState.stamina = 100;
   playerState.iFrames = 0;
   playerState.dead = false;
   score = 0;
+  coins = 0;
 
-  // 2. Reseta posição e rotação da câmera
   cameraState.position = [0, 1.7, 5];
   cameraState.yaw = -Math.PI / 2;
   cameraState.pitch = 0;
   cameraState.velocityY = 0;
   cameraState.isGrounded = true;
 
-  // 3. Reseta munição da arma
   if (weapon) {
     weapon.ammo = weapon.maxAmmo;
     weapon._reloading = false;
     weapon._cooldown = 0;
   }
 
-  // 4. Limpa o overlay de dano do HTML se tiver ficado ativo
   document.getElementById("damageOverlay").classList.remove("flash-red");
-
-  // 5. Restaura o título do menu original caso tenha morrido antes
   document.getElementById("mainMenu").querySelector("h1").innerText =
     "Cave Game Part. II";
 
-  // 6. Spawna um novo grupo de monstros limpos
   monsters = spawnMonsters(6, dungeonArena.bounds, { safeRadius: 3.5 });
-
-  // 7. Reseta os Pickups
   pickups = spawnPickups(5, dungeonArena.bounds);
   doors = createDoors(dungeonArena.bounds, meshCube);
 }
@@ -555,25 +614,25 @@ async function init() {
 
   uniforms = getUniformLocations(gl, program);
 
-  // Mesh do cubo (monstros)
+  // Mesh do cubo (monstros, arma, pickups)
   meshCube = createMesh(gl, program, parseOBJ(CUBE_OBJ));
 
-  // Arena da dungeon (chão/teto/paredes) + texturas proceduais
+  // Arena da dungeon
   dungeonArena = createDungeonArena(gl, program, {
-    halfX: 10,
-    halfZ: 10,
+    halfX: 60,
+    halfZ: 80,
     height: 4,
-    wallTiling: [8, 2],
-    floorTiling: [8, 8],
-    ceilTiling: [8, 8],
+    wallTiling:  [8, 2],
+    floorTiling: [64, 64],
+    ceilTiling:  [64, 64],
   });
   dungeonTextures = {
-    wall: createStoneWallTexture(gl),
+    wall:  createStoneWallTexture(gl),
     floor: createStoneFloorTexture(gl),
-    ceil: createCeilingTexture(gl),
+    ceil:  createCeilingTexture(gl),
   };
 
-  // Câmera respeita os limites físicos da arena (não atravessa parede)
+  // Limites da arena para colisão de parede (AABB simples da arena externa)
   setArenaBounds(dungeonArena.bounds);
 
   // Escopeta
@@ -585,17 +644,14 @@ async function init() {
     range: 60,
   });
 
-  // Inicializa os inputs de teclado/mouse
   initCameraControls(canvas);
 
-  // Disparo: clique esquerdo do mouse (apenas quando pointer lock ativo)
   canvas.addEventListener("mousedown", (e) => {
     if (e.button === 0 && document.pointerLockElement === canvas) {
       tryFire();
     }
   });
 
-  // Recarga manual (tecla R) e pausa (ESC)
   window.addEventListener("keydown", (e) => {
     if (e.key.toLowerCase() === "r") weapon.startReload();
     if (e.key === "Escape") {
@@ -611,30 +667,32 @@ async function init() {
         }
         return false;
       });
-      if (msg) console.log(msg); // Substituir por feedback visual se quiser
+      if (msg) console.log(msg);
     }
   });
 
-  // Personagem externo opcional
+  // ── Carrega o mapa OBJ externo + constrói o collider ─────────────────────
   try {
     const charData = await loadOBJ("assets/obj/map/map.obj");
     meshCharacter = createMesh(gl, program, charData);
-    console.log(`✅ Personagem carregado: ${charData.vertexCount} vértices`);
+    console.log(`✅ Mapa carregado: ${charData.vertexCount} vértices`);
+
+    // COLISÃO PRECISA: constrói o MapCollider a partir dos triângulos do OBJ.
+    // O mapa é desenhado com model matrix identity (posição [0,0,0]), então
+    // passamos null para usar os vértices no espaço do mundo diretamente.
+    mapCollider = new MapCollider(charData, null);
+
   } catch (e) {
-    console.warn("⚠️ Personagem opcional não carregado:", e.message);
+    console.warn("⚠️ Mapa OBJ não carregado:", e.message);
+    mapCollider = null;
   }
 
-  // Spawna monstros placeholder
-  monsters = spawnMonsters(6, dungeonArena.bounds, { safeRadius: 3.5 });
+  monsters = spawnMonsters(600, dungeonArena.bounds, { safeRadius: 3.5 });
   doors = createDoors(dungeonArena.bounds, meshCube);
-  // NOVO: Spawna 5 itens aleatórios pelo mapa
-  pickups = spawnPickups(5, dungeonArena.bounds);
+  pickups = spawnPickups(500, dungeonArena.bounds);
 
-  // Inicializa o menu principal passando o callback de clique no "Jogar"
   initMainMenu(() => {
-    // Chame o reset aqui! Toda vez que clicar em jogar, o jogo limpa o estado anterior
     resetGame();
-
     paused = false;
     requestAnimationFrame((t) => {
       lastTime = t * 0.001;

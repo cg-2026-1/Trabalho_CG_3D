@@ -5,9 +5,9 @@ export const cameraState = {
     position:    [0, 1.7, 5],
     yaw:         -Math.PI / 2,
     pitch:       0,
-    walkSpeed:   4.0,
-    sprintSpeed: 7.5,
-    speed:       4.0,
+    walkSpeed:   8.0,
+    sprintSpeed: 12.5,
+    speed:       8.0,
     sensitivity: 0.002,
     
     // Física do pulo
