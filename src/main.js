@@ -396,42 +396,9 @@ function update(dt) {
         
       } else if (p.type === "coin") {
         coins++;
+        playSound('coin');
       }
     }
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COLISÃO DO MAPA OBJ — resolve a posição do player contra a geometria importada
-// ─────────────────────────────────────────────────────────────────────────────
-/**
- * Aplica o MapCollider após updateCamera() mover o player.
- * Se o collider ainda não foi criado (mapa não carregado), não faz nada.
- *
- * O Camera.js já aplica colisão com a AABB da arena (paredes externas).
- * Este passo complementa com a geometria INTERNA do map.obj (paredes de salas,
- * pilares, rampas, etc.) que não é representada pela bounding box simples.
- */
-function resolveMapCollision() {
-  if (!mapCollider) return;
-
-  const pos = cameraState.position;
-  const { pos: corrected, onGround, groundY } = mapCollider.resolve(
-    pos,
-    pos, // prevPos (simplificado — poderia guardar a posição anterior)
-  );
-
-  cameraState.position[0] = corrected[0];
-  cameraState.position[1] = corrected[1];
-  cameraState.position[2] = corrected[2];
-
-  // Integra com a física de pulo da câmera:
-  // se o collider diz que está no chão, e a câmera está caindo, pousa aqui.
-  if (onGround && cameraState.velocityY <= 0) {
-    cameraState.velocityY = 0;
-        playSound('coin');
-    cameraState.isGrounded = true;
-    // A posição Y já foi corrigida pelo resolve() acima.
   }
 }
 
