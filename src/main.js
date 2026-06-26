@@ -1,4 +1,5 @@
 // src/main.js — Dungeon FPS: arena texturizada + monstros-cubo + escopeta
+import { playSound, updateMovementSound, startSoundtrack, stopSoundtrack} from "./game/audio/AudioManager.js";
 import { initWebGL, resizeCanvas } from "./engine/renderer/webglSetup.js";
 import {
   createDoors,
@@ -64,6 +65,7 @@ let lastTime = 0;
 let totalTime = 0;
 let paused = true;
 let score = 0;
+let wasGrounded = true;
 
 // ────────── Estado do Jogador ──────────
 const playerState = {
@@ -275,6 +277,8 @@ function update(dt) {
   if (paused || playerState.dead) return;
   totalTime += dt;
 
+  let isSprinting = false;
+
   // --- Mecânica de Estamina e Corrida ---
   if (
     keys["shift"] &&
@@ -284,6 +288,7 @@ function update(dt) {
   ) {
     cameraState.speed = cameraState.sprintSpeed;
     playerState.stamina -= 30 * dt;
+    isSprinting = true;
   } else {
     cameraState.speed = cameraState.walkSpeed;
     if (playerState.stamina < playerState.maxStamina && !keys["shift"]) {
@@ -297,6 +302,23 @@ function update(dt) {
   resolveMapCollision();
 
   weapon.update(dt);
+
+  // --- Lógica de Áudio: Pulo e Aterrissagem ---
+  // Se estava no chão, a câmera não está mais, e a velocidade Y é positiva = Pulou
+  if (wasGrounded && !cameraState.isGrounded && cameraState.velocityY > 0) {
+      playSound('jump');
+  } 
+  // Se não estava no chão e agora a câmera está = Aterrissou
+  else if (!wasGrounded && cameraState.isGrounded) {
+      playSound('jump'); // Você pode usar o mesmo som pra bater no chão
+  }
+
+  // Atualiza a memória pro próximo frame
+  wasGrounded = cameraState.isGrounded;
+
+  // --- Lógica de Áudio: Passos ---
+  updateMovementSound(cameraState.isMoving, isSprinting, cameraState.isGrounded);
+
   updateDoors(doors, dt, cameraState.position, (cost) => {
     if (coins >= cost) {
       coins -= cost;
@@ -326,19 +348,33 @@ function update(dt) {
 
     if (dist < collisionDist && dy < 1.5 && playerState.iFrames <= 0) {
       playerState.hp -= 20;
+
+      playSound('damage'); 
+      
       playerState.iFrames = 1.5;
       document.getElementById("damageOverlay").classList.add("flash-red");
 
       if (playerState.hp <= 0) {
         playerState.hp = 0;
         playerState.dead = true;
-        document.getElementById("mainMenu").querySelector("h1").innerText =
-          "VOCÊ MORREU";
+        stopSoundtrack();
+        document.getElementById("mainMenu").querySelector("h1").innerText = "VOCÊ MORREU";
         showMenu();
         document.exitPointerLock?.();
       }
     }
   }
+
+  if (playerState.hp <= 0) {
+        playerState.hp = 0;
+        playerState.dead = true;
+
+        stopSoundtrack(); 
+        
+        document.getElementById("mainMenu").querySelector("h1").innerText = "VOCÊ MORREU";
+        showMenu();
+        document.exitPointerLock?.();
+      }
 
   // --- Pickups ---
   const pickupRadius = 1.2;
@@ -352,12 +388,15 @@ function update(dt) {
 
     if (dist < pickupRadius) {
       p.active = false;
+
       if (p.type === "health") {
         playerState.hp = Math.min(playerState.hp + 30, playerState.maxHp);
-      } else if (p.type === "ammo") {
-        weapon.ammo = Math.min(weapon.ammo + 4, weapon.maxAmmo);
+        console.log("Coletou Vida! HP: " + playerState.hp);
+        playSound('life');
+        
       } else if (p.type === "coin") {
         coins++;
+        playSound('coin');
       }
     }
   }
@@ -417,6 +456,7 @@ function tryFire() {
   }
 
   if (result.fired) {
+    playSound('shotgun');
     cameraState.pitch += 0.015;
   }
 }
@@ -436,14 +476,16 @@ function spawnPickups(count, bounds) {
       margin +
       Math.random() * (bounds.maxZ - bounds.minZ - 2 * margin);
 
-    const type = Math.random() > 0.5 ? "health" : "ammo";
+    // 100% de chance de ser vida
+    const type = "health";
+
     newPickups.push({
       id: i,
       type,
       position: [x, 0.4, z],
       active: true,
       baseY: 0.4,
-      color: type === "health" ? [0.2, 0.8, 0.2] : [0.8, 0.6, 0.1],
+      color: [0.2, 0.8, 0.2]
     });
   }
   return newPickups;
@@ -653,11 +695,17 @@ async function init() {
   });
 
   window.addEventListener("keydown", (e) => {
-    if (e.key.toLowerCase() === "r") weapon.startReload();
+    if (e.key.toLowerCase() === "r") {
+      if (!weapon._reloading && weapon.ammo < weapon.maxAmmo) {
+            weapon.startReload();
+            playSound('reload');
+        }
+    }
     if (e.key === "Escape") {
       paused = true;
       showMenu();
       document.exitPointerLock?.();
+      stopSoundtrack();
     }
     if (e.key.toLowerCase() === "e") {
       const msg = tryInteractDoor(doors, cameraState.position, (cost) => {
@@ -667,7 +715,13 @@ async function init() {
         }
         return false;
       });
-      if (msg) console.log(msg);
+      
+      if (msg) {
+          console.log(msg); 
+          if (msg.includes("desbloqueada")) {
+              playSound('door');
+          }
+      }
     }
   });
 
@@ -693,6 +747,9 @@ async function init() {
 
   initMainMenu(() => {
     resetGame();
+
+    startSoundtrack();
+
     paused = false;
     requestAnimationFrame((t) => {
       lastTime = t * 0.001;
