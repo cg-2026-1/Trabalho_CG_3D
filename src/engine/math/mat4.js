@@ -76,6 +76,9 @@ export function translate(m, v) {
 }
 
 // Rotação em Y (para billboard / NPC lookAt no plano XZ)
+// Convenção column-major WebGL: rot[col*4 + row]
+// col0 = [c, 0, s, 0], col1 = [0, 1, 0, 0], col2 = [-s, 0, c, 0], col3 = [0,0,0,1]
+// Transformação do vetor +Z local (0,0,1): resultado = (-sin(a), 0, cos(a)) no mundo
 export function rotateY(m, angle) {
     const c = Math.cos(angle), s = Math.sin(angle);
     const rot = new Float32Array([
@@ -143,13 +146,21 @@ export function fromScale(v) {
 }
 
 /**
- * Ângulo de rotação em Y para um objeto em selfPos "olhar" em direção
- * a targetPos, apenas no plano XZ (usado pelos monstros mirarem o player).
+ * Ângulo de rotação em Y para que o eixo +Z LOCAL do objeto aponte
+ * em direção a targetPos no plano XZ — "olhar para" manual.
+ *
+ * DERIVAÇÃO:
+ *   rotateY(a) transforma o vetor +Z local para (-sin(a), 0, cos(a)) no mundo.
+ *   Queremos que esse vetor aponte para (dx, 0, dz) = normalize(target - self).
+ *   Portanto:  sin(a) = -dx/len   e   cos(a) = dz/len
+ *   Logo:      a = atan2(-dx, dz)
+ *
+ * ERRO ANTERIOR: atan2(dx, dz) fazia o monstro olhar para o lado oposto ao player.
  */
 export function yawTowards(selfPos, targetPos) {
     const dx = targetPos[0] - selfPos[0];
     const dz = targetPos[2] - selfPos[2];
-    return Math.atan2(dx, dz);
+    return Math.atan2(-dx, dz);
 }
 
 // Transforma um ponto [x,y,z] por uma matriz 4x4 (column-major)
