@@ -5,7 +5,7 @@ export const sounds = {
     reload:  new Audio('assets/audio/reload_sound.mp3'),
     walk:    new Audio('assets/audio/walking-sound.mp3'),
     run:     new Audio('assets/audio/running.mp3'),
-    jump:    new Audio('assets/audio/jump_landing.mp3'),
+    jump:    new Audio('assets/audio/jump-landing.mp3'),
     door:    new Audio('assets/audio/door-openning.mp3'),
     coin:    new Audio('assets/audio/coin.mp3'),
     life:    new Audio('assets/audio/one_beep_life.mp3'),
