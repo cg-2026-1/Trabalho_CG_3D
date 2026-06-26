@@ -8,6 +8,7 @@ import {
   tryInteractDoor,
   updateDoorHUD,
   isDoorBlocking,
+  resolveDoorCollision,
 } from "./game/core/Door.js";
 
 import {
@@ -37,7 +38,7 @@ import {
   cameraState,
   keys,
 } from "./game/core/Camera.js";
-import { initMainMenu, showMenu } from "./game/ui/MainMenu.js";
+import { initMainMenu, showMenu, showVictoryMenu } from "./game/ui/MainMenu.js";
 import {
   createDungeonArena,
   drawDungeonArena,
@@ -64,8 +65,15 @@ let weapon;
 let lastTime = 0;
 let totalTime = 0;
 let paused = true;
+let gameWon = false;
+const exitZone = {
+  position: [20.668528, 2.0, -34.5], // Centro (Y = 2 para encostar no chão sendo H=4)
+  scale: [4, 4.0, 2.5],            // Largura, Altura, Profundidade
+  color: [0.8, 1.0, 0.8]             // Tom esverdeado claro/brilhante
+};
 let score = 0;
 let wasGrounded = true;
+let prevCameraPos = [0, 1.7, 5];
 
 // ────────── Estado do Jogador ──────────
 const playerState = {
@@ -277,6 +285,8 @@ function update(dt) {
   if (paused || playerState.dead) return;
   totalTime += dt;
 
+  prevCameraPos = [...cameraState.position];
+
   let isSprinting = false;
 
   // --- Mecânica de Estamina e Corrida ---
@@ -298,7 +308,7 @@ function update(dt) {
   playerState.stamina = Math.max(0, Math.min(playerState.maxStamina, playerState.stamina));
 
   // --- Câmera + colisão do mapa OBJ ---
-  updateCamera(dt);
+  updateCamera(dt, doors);
   resolveMapCollision();
 
   weapon.update(dt);
@@ -315,9 +325,6 @@ function update(dt) {
 
   // Atualiza a memória pro próximo frame
   wasGrounded = cameraState.isGrounded;
-
-  // --- Lógica de Áudio: Passos ---
-  updateMovementSound(cameraState.isMoving, isSprinting, cameraState.isGrounded);
 
   updateDoors(doors, dt, cameraState.position, (cost) => {
     if (coins >= cost) {
@@ -400,6 +407,30 @@ function update(dt) {
       }
     }
   }
+
+  if (!gameWon) {
+    const ex = exitZone.position[0];
+    const ez = exitZone.position[2];
+    const hx = exitZone.scale[0] / 2; // Metade da largura
+    const hz = exitZone.scale[2] / 2; // Metade da profundidade
+
+    const px = cameraState.position[0];
+    const pz = cameraState.position[2];
+
+    // Checagem de colisão AABB simples no eixo X e Z
+    if (Math.abs(px - ex) < hx + 0.3 && Math.abs(pz - ez) < hz + 0.3) {
+      gameWon = true;
+      paused = true;
+      stopSoundtrack();
+      document.exitPointerLock?.();
+      showVictoryMenu();
+    }
+
+    stopSoundtrack();
+  }
+
+  // --- Lógica de Áudio: Passos ---
+  updateMovementSound(cameraState.isMoving, isSprinting, cameraState.isGrounded);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -414,24 +445,24 @@ function update(dt) {
  * pilares, rampas, etc.) que não é representada pela bounding box simples.
  */
 function resolveMapCollision() {
+  // 1) Portas: A colisão de portas JÁ É FEITA no updateCamera() do Camera.js!
+  // Removemos a chamada duplicada e invertida daqui para não travar o jogador.
+
+  // 2) Geometria do map.obj (paredes internas, pilares, chão real)
   if (!mapCollider) return;
 
   const pos = cameraState.position;
-  const { pos: corrected, onGround, groundY } = mapCollider.resolve(
-    pos,
-    pos, // prevPos (simplificado — poderia guardar a posição anterior)
-  );
+  
+  // Enviamos a posição atual e a posição anterior corretamente
+  const { pos: corrected, onGround, groundY } = mapCollider.resolve(pos, prevCameraPos);
 
   cameraState.position[0] = corrected[0];
   cameraState.position[1] = corrected[1];
   cameraState.position[2] = corrected[2];
 
-  // Integra com a física de pulo da câmera:
-  // se o collider diz que está no chão, e a câmera está caindo, pousa aqui.
   if (onGround && cameraState.velocityY <= 0) {
     cameraState.velocityY = 0;
     cameraState.isGrounded = true;
-    // A posição Y já foi corrigida pelo resolve() acima.
   }
 }
 
@@ -542,6 +573,12 @@ function render() {
     drawMesh(meshCube, model, monster.color, false, null);
   }
 
+  // ── Bloco da Zona de Saída ────────────────────────────────────────────────
+  let exitMatrix = createIdentity();
+  exitMatrix = translate(exitMatrix, exitZone.position);
+  exitMatrix = scale(exitMatrix, exitZone.scale);
+  drawMesh(meshCube, exitMatrix, exitZone.color, false, null);
+
   // ── Mapa OBJ externo (com triplanar) ─────────────────────────────────────
   if (meshCharacter) {
     const charModel = fromTranslation([0, 0, 0]);
@@ -614,6 +651,7 @@ function gameLoop(currentTime) {
 
 // ────────── Reset ──────────
 function resetGame() {
+  gameWon = false;
   playerState.hp = 100;
   playerState.stamina = 100;
   playerState.iFrames = 0;
@@ -635,11 +673,11 @@ function resetGame() {
 
   document.getElementById("damageOverlay").classList.remove("flash-red");
   document.getElementById("mainMenu").querySelector("h1").innerText =
-    "Cave Game Part. II";
+    "Dungeon Escape";
 
-  monsters = spawnMonsters(6, dungeonArena.bounds, { safeRadius: 3.5 });
-  pickups = spawnPickups(5, dungeonArena.bounds);
-  doors = createDoors(dungeonArena.bounds, meshCube);
+  monsters = spawnMonsters(100, dungeonArena.bounds, { safeRadius: 3.5 });
+  pickups = spawnPickups(100, dungeonArena.bounds);
+  doors = createDoors(gl, program, dungeonArena.bounds);
 }
 
 // ────────── Init ──────────
@@ -741,9 +779,9 @@ async function init() {
     mapCollider = null;
   }
 
-  monsters = spawnMonsters(600, dungeonArena.bounds, { safeRadius: 3.5 });
-  doors = createDoors(dungeonArena.bounds, meshCube);
-  pickups = spawnPickups(500, dungeonArena.bounds);
+  monsters = spawnMonsters(100, dungeonArena.bounds, { safeRadius: 3.5 });
+  doors = createDoors(gl, program, dungeonArena.bounds);
+  pickups = spawnPickups(100, dungeonArena.bounds);
 
   initMainMenu(() => {
     resetGame();

@@ -32,11 +32,13 @@ html {
 }
 
 #mainMenu,
-#howToPlay {
+#howToPlay,
+#victoryMenu {
   pointer-events: auto;
 }
 
-#mainMenu {
+#mainMenu,
+#victoryMenu {
   position: absolute;
   inset: 0;
   display: flex;
@@ -371,4 +373,46 @@ html {
 #info,
 #lightInfo {
   display: none;
+}
+
+#victoryMenu::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(76, 175, 80, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(76, 175, 80, 0.08) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+  pointer-events: none;
+}
+
+#victoryMenu button {
+  width: 280px;
+  padding: 13px 20px;
+  border: none;
+  border-radius: 10px;
+  font-family: "Inter", monospace, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: transform 0.15s, opacity 0.15s;
+  letter-spacing: 0.01em;
+  color: #fff;
+  margin-bottom: 10px;
+  position: relative;
+  z-index: 1;
+}
+
+#victoryMenu button:hover {
+  transform: translateY(-1px);
+  opacity: 0.9;
+}
+
+#restartBtn {
+  background: #3ecf8e;
 }
